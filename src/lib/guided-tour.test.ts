@@ -1,6 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { hydrateTourState, initialTourState, routeMatches, tourReducer } from "./guided-tour";
+import {
+  clampTourPanelPosition,
+  defaultTourPanelPosition,
+  hydrateTourPanelPosition,
+  hydrateTourState,
+  initialTourState,
+  routeMatches,
+  tourReducer,
+} from "./guided-tour";
 describe("guided tour state", () => {
   it("advances deterministically and can be skipped", () => {
     assert.equal(tourReducer(initialTourState, { type: "NEXT" }).step, "clients");
@@ -22,5 +30,22 @@ describe("guided tour state", () => {
     assert.deepEqual(tourReducer(initialTourState, { type: "HYDRATE", state: hydrateTourState(saved)! }), saved);
     assert.equal(hydrateTourState({ step: "unknown", active: true }), null);
     assert.equal(hydrateTourState({ step: "template", active: "yes", completed: false, dismissed: false, paused: false }), null);
+  });
+  it("starts beside the desktop sidebar and keeps dragged positions on screen", () => {
+    assert.deepEqual(defaultTourPanelPosition(1440), { x: 272, y: 80 });
+    assert.deepEqual(defaultTourPanelPosition(390), { x: 16, y: 80 });
+    assert.deepEqual(
+      clampTourPanelPosition(
+        { x: 1400, y: -100 },
+        { width: 1440, height: 900 },
+        { width: 384, height: 240 },
+      ),
+      { x: 1040, y: 16 },
+    );
+    assert.deepEqual(hydrateTourPanelPosition({ x: 360, y: 120 }), {
+      x: 360,
+      y: 120,
+    });
+    assert.equal(hydrateTourPanelPosition({ x: "360", y: 120 }), null);
   });
 });

@@ -18,3 +18,47 @@ export function tourReducer(state: TourState, action: TourAction): TourState {
   return next === "complete" ? { ...state, step: next, active: false, completed: true, paused: false } : { ...state, step: next, paused: false };
 }
 export function routeMatches(step: TourStep, pathname: string) { if (step === "complete") return true; if (step === "template") return /^\/proposals\/[^/]+\/template$/.test(pathname); if (step === "contract") return /^\/contracts\/[^/]+$/.test(pathname); const route = expectedRoute[step]; return pathname === route; }
+
+export type TourPanelPosition = { x: number; y: number };
+export type TourPanelSize = { width: number; height: number };
+
+export function defaultTourPanelPosition(
+  viewportWidth: number,
+): TourPanelPosition {
+  return {
+    // The desktop sidebar is 16rem (256px); this leaves a 16px gutter.
+    x: viewportWidth >= 768 ? 272 : 16,
+    y: 80,
+  };
+}
+
+export function clampTourPanelPosition(
+  position: TourPanelPosition,
+  viewport: TourPanelSize,
+  panel: TourPanelSize,
+  inset = 16,
+): TourPanelPosition {
+  const maxX = Math.max(inset, viewport.width - panel.width - inset);
+  const maxY = Math.max(inset, viewport.height - panel.height - inset);
+
+  return {
+    x: Math.min(Math.max(inset, position.x), maxX),
+    y: Math.min(Math.max(inset, position.y), maxY),
+  };
+}
+
+export function hydrateTourPanelPosition(
+  raw: unknown,
+): TourPanelPosition | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Partial<TourPanelPosition>;
+  if (
+    typeof value.x !== "number" ||
+    !Number.isFinite(value.x) ||
+    typeof value.y !== "number" ||
+    !Number.isFinite(value.y)
+  ) {
+    return null;
+  }
+  return { x: value.x, y: value.y };
+}
