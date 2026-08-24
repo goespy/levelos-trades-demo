@@ -35,10 +35,89 @@ describe("contract document", () => {
     assert.equal(doc.fields.contractDate, "2026-01-02");
     assert.equal(doc.fields.saltSystemYes, true);
     assert.equal(doc.fields.sodContractor, true);
-    assert.equal(doc.fields.additionalFillContractor, false);
+    assert.equal(doc.fields.additionalFillContractor, true);
     assert.equal("additionalFillPB" in doc.fields, false);
     assert.equal("sprinklersContractor" in doc.fields, true);
     assert.equal("meshBarrierContractor" in doc.fields, true);
+  });
+  it("autofills a selected build into a complete, internally consistent contract", () => {
+    const doc = generateContractDefaults({
+      date: "2026-08-01",
+      client: {
+        name: "Robert & Lisa Hayward",
+        phone: "(941) 555-0142",
+        address: "1284 Coral Ridge Way",
+        city: "Sarasota",
+        zip: "34232",
+      },
+      build: {
+        name: "Hayward — Modern Geometric",
+        poolLength: 30,
+        poolWidth: 14,
+        hasSpa: true,
+        hasHeat: true,
+        hasAutomation: true,
+        isSalt: true,
+        hasCage: true,
+        deckMaterial: "TRAVERTINE",
+        equipment: "FULL",
+      },
+      proposal: {
+        total: 110000,
+        lineItems: JSON.stringify([{ label: "Pebble Sheen" }]),
+      },
+    });
+
+    assert.equal(doc.fields.installationAddress, "1284 Coral Ridge Way, Sarasota, 34232");
+    assert.equal(doc.fields.poolSize, "30' × 14'");
+    assert.equal(doc.fields.sqFt, "420 sq ft footprint");
+    assert.equal(doc.fields.interiorPebble, true);
+    assert.equal(doc.fields.saltSystemYes, true);
+    assert.equal(doc.fields.saltSystemNo, false);
+    assert.equal(doc.fields.copingTrav, true);
+    assert.equal(doc.fields.screenType, "Aluminum screen enclosure");
+    assert.equal(doc.fields.spaDim, "7 ft × 7 ft");
+    assert.equal(doc.fields.contractPrice, 110000);
+    assert.equal(doc.fields.depositAmount, doc.fields.payment1Amount);
+
+    for (const key of [
+      "purchasedBy",
+      "installationAddress",
+      "jobPhone",
+      "poolShape",
+      "poolSize",
+      "minDepth",
+      "maxDepth",
+      "interiorColor",
+      "pumpHP",
+      "ledLightCount",
+      "cleaningEquipment",
+      "sunShelf",
+      "engineering",
+      "deckMaterial",
+      "screenType",
+      "safetyCode",
+      "contractorSignature",
+      "contractorDate",
+    ]) {
+      assert.notEqual(doc.fields[key], "");
+      assert.notEqual(doc.fields[key], undefined);
+    }
+
+    for (const [yesKey, noKey] of [
+      ["earthRemovalYes", "earthRemovalNo"],
+      ["shuttleDigYes", "shuttleDigNo"],
+      ["vacLineYes", "vacLineNo"],
+      ["ledLightYes", "ledLightNo"],
+      ["saltSystemYes", "saltSystemNo"],
+      ["infloorCleanYes", "infloorCleanNo"],
+      ["handRailYes", "handRailNo"],
+      ["ladderYes", "ladderNo"],
+      ["pilingsHelicalYes", "pilingsHelicalNo"],
+      ["poolWiringYes", "poolWiringNo"],
+    ]) {
+      assert.notEqual(Boolean(doc.fields[yesKey]), Boolean(doc.fields[noKey]));
+    }
   });
   it("round-trips persisted acknowledgements without reconstructing them", () => {
     const envelope = generateContractDefaults({});

@@ -5,6 +5,8 @@
 // Idempotent — wipes then reseeds.
 
 import {
+  type Client,
+  type Proposal,
   PrismaClient,
   type PoolBuild,
 } from "../src/generated/prisma/client";
@@ -31,15 +33,148 @@ const DAYS = (n: number): Date => {
 // are intentionally avoided because their subjects can change or be unrelated.
 const POOL_PHOTOS = DEMO_PROPOSAL_RENDER_IMAGES;
 
-function seededContractFields(proposal: Record<string, unknown>, clientName: string) {
-  const envelope = generateContractDefaults({ proposal, client: { name: clientName } });
-  const initials = clientName.split(/\s+/).filter((part) => /^[A-Za-z]/.test(part)).map((part) => part[0]).join("").toUpperCase();
-  envelope.fields = { ...envelope.fields, purchasedBy: clientName, ...Object.fromEntries(Array.from({ length: 16 }, (_, index) => [`initials${index + 1}b`, initials])) };
-  envelope.acknowledgements = envelope.acknowledgements.map((item) => ({ ...item, customerInitials: initials }));
-  if (!envelope.acknowledgements.every((item) => item.customerInitials === initials)) throw new Error("Signed fixture acknowledgement initials are incomplete");
-  const contractData = JSON.stringify(envelope);
+function seededContractFields({
+  proposal,
+  client,
+  build,
+  signerName,
+}: {
+  proposal: Proposal;
+  client: Client;
+  build: PoolBuild;
+  signerName: string;
+}) {
   const signedTimestamp = "2026-08-01T15:00:00.000Z";
-  return { contractData, signatureData: JSON.stringify({ signerName: clientName, signerEmail: `${clientName.toLowerCase().replace(/\s+/g, ".")}@example.com`, signerIp: "192.0.2.44", signerUserAgent: "LEVELos demo fixture", typedSignature: clientName, consent: true, consentTimestamp: signedTimestamp, signedTimestamp, auditTrail: [{ event: "consent-captured", actor: "customer", at: signedTimestamp }, { event: "typed-signature-applied", actor: "customer", at: signedTimestamp }], documentHash: documentHash(envelope) }) };
+  const signedDate = signedTimestamp.slice(0, 10);
+  const envelope = generateContractDefaults({
+    proposal: proposal as unknown as Record<string, unknown>,
+    client: client as unknown as Record<string, unknown>,
+    build: build as unknown as Record<string, unknown>,
+    date: signedDate,
+  });
+  const initials = signerName
+    .split(/\s+/)
+    .filter((part) => /^[A-Za-z]/.test(part))
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  envelope.fields = {
+    ...envelope.fields,
+    purchasedBy: client.name,
+    buyerSignature1: signerName,
+    buyerDate1: signedDate,
+    buyerSignature2: signerName,
+    buyerDate2: signedDate,
+    contractorDate: signedDate,
+    ...Object.fromEntries(
+      Array.from({ length: 16 }, (_, index) => [
+        `initials${index + 1}b`,
+        initials,
+      ]),
+    ),
+  };
+  envelope.acknowledgements = envelope.acknowledgements.map((item) => ({
+    ...item,
+    customerInitials: initials,
+  }));
+
+  const requiredFixtureFields = [
+    "purchasedBy",
+    "installationAddress",
+    "jobPhone",
+    "poolShape",
+    "poolSize",
+    "sqFt",
+    "minDepth",
+    "maxDepth",
+    "interiorColor",
+    "tileAllowance",
+    "pumpHP",
+    "ledLightCount",
+    "cleaningEquipment",
+    "sunShelf",
+    "engineering",
+    "deckMaterial",
+    "screenType",
+    "safetyCode",
+    "contractPrice",
+    "buyerSignature1",
+    "buyerDate1",
+    "contractorSignature",
+    "contractorDate",
+  ];
+  const missingFixtureFields = requiredFixtureFields.filter((key) => {
+    const value = envelope.fields[key];
+    return value === null || value === undefined || value === "";
+  });
+  if (missingFixtureFields.length) {
+    throw new Error(
+      `Signed fixture fields are incomplete: ${missingFixtureFields.join(", ")}`,
+    );
+  }
+
+  const exclusiveSelections = [
+    ["earthRemovalYes", "earthRemovalNo"],
+    ["additionalFillContractor", "additionalFillBuyer"],
+    ["shuttleDigYes", "shuttleDigNo"],
+    ["vacLineYes", "vacLineNo"],
+    ["ledLightYes", "ledLightNo"],
+    ["chlorinatorYes", "chlorinatorNo"],
+    ["saltSystemYes", "saltSystemNo"],
+    ["infloorCleanYes", "infloorCleanNo"],
+    ["handRailYes", "handRailNo"],
+    ["ladderYes", "ladderNo"],
+    ["pilingsHelicalYes", "pilingsHelicalNo"],
+    ["poolWiringYes", "poolWiringNo"],
+    ["sprinklersContractor", "sprinklersBuyer"],
+    ["sodContractor", "sodBuyer"],
+  ];
+  for (const [selectedKey, alternateKey] of exclusiveSelections) {
+    if (
+      Boolean(envelope.fields[selectedKey]) ===
+      Boolean(envelope.fields[alternateKey])
+    ) {
+      throw new Error(
+        `Signed fixture selection is invalid: ${selectedKey}/${alternateKey}`,
+      );
+    }
+  }
+
+  if (
+    !envelope.acknowledgements.every(
+      (item) => item.customerInitials === initials,
+    )
+  ) {
+    throw new Error("Signed fixture acknowledgement initials are incomplete");
+  }
+  const contractData = JSON.stringify(envelope);
+  return {
+    contractData,
+    signatureData: JSON.stringify({
+      signerName,
+      signerEmail: client.email ?? "signer@example.com",
+      signerIp: "192.0.2.44",
+      signerUserAgent: "LEVELos demo fixture",
+      typedSignature: signerName,
+      consent: true,
+      consentTimestamp: signedTimestamp,
+      signedTimestamp,
+      auditTrail: [
+        {
+          event: "consent-captured",
+          actor: "customer",
+          at: signedTimestamp,
+        },
+        {
+          event: "typed-signature-applied",
+          actor: "customer",
+          at: signedTimestamp,
+        },
+      ],
+      documentHash: documentHash(envelope),
+    }),
+  };
 }
 
 async function main() {
@@ -632,27 +767,52 @@ async function main() {
   const haywardContract = await prisma.contract.create({
     data: { proposalId: haywardProp.id, status: "SIGNED",
       signedDate: DAYS(-8), signedByClient: "Robert Hayward", signedByOwner: "Portfolio Demo Owner",
-      shareToken: randomUUID(), ...seededContractFields(haywardProp as unknown as Record<string, unknown>, "Robert Hayward") },
+      shareToken: randomUUID(), ...seededContractFields({
+        proposal: haywardProp,
+        client: hayward,
+        build: haywardBuild,
+        signerName: "Robert Hayward",
+      }) },
   });
   const chenContract = await prisma.contract.create({
     data: { proposalId: chenProp.id, status: "SIGNED",
       signedDate: DAYS(-22), signedByClient: "Marcus Chen", signedByOwner: "Portfolio Demo Owner",
-      shareToken: randomUUID(), ...seededContractFields(chenProp as unknown as Record<string, unknown>, "Marcus Chen") },
+      shareToken: randomUUID(), ...seededContractFields({
+        proposal: chenProp,
+        client: chen,
+        build: chenBuild,
+        signerName: "Marcus Chen",
+      }) },
   });
   const sullivanContract = await prisma.contract.create({
     data: { proposalId: sullivanProp.id, status: "SIGNED",
       signedDate: DAYS(-170), signedByClient: "Brad Sullivan", signedByOwner: "Portfolio Demo Owner",
-      shareToken: randomUUID(), ...seededContractFields(sullivanProp as unknown as Record<string, unknown>, "Brad Sullivan") },
+      shareToken: randomUUID(), ...seededContractFields({
+        proposal: sullivanProp,
+        client: sullivan,
+        build: sullivanBuild,
+        signerName: "Brad Sullivan",
+      }) },
   });
   const mendezContract = await prisma.contract.create({
     data: { proposalId: mendezProp.id, status: "SIGNED",
       signedDate: DAYS(-38), signedByClient: "Jose Mendez", signedByOwner: "Portfolio Demo Owner",
-      shareToken: randomUUID(), ...seededContractFields(mendezProp as unknown as Record<string, unknown>, "Jose Mendez") },
+      shareToken: randomUUID(), ...seededContractFields({
+        proposal: mendezProp,
+        client: mendez,
+        build: mendezBuild,
+        signerName: "Jose Mendez",
+      }) },
   });
   const kowalskiContract = await prisma.contract.create({
     data: { proposalId: kowalskiProp.id, status: "SIGNED",
       signedDate: DAYS(-2), signedByClient: "Tim Kowalski", signedByOwner: "Portfolio Demo Owner",
-      shareToken: randomUUID(), ...seededContractFields(kowalskiProp as unknown as Record<string, unknown>, "Tim Kowalski") },
+      shareToken: randomUUID(), ...seededContractFields({
+        proposal: kowalskiProp,
+        client: kowalski,
+        build: kowalskiBuild,
+        signerName: "Tim Kowalski",
+      }) },
   });
   console.log("Created 5 contracts (all SIGNED)");
 
@@ -680,7 +840,12 @@ async function main() {
   });
   const andersonContract = await prisma.contract.create({
     data: { proposalId: andersonProp.id, status: "SIGNED",
-      signedDate: DAYS(-320), signedByClient: "Tom Anderson", signedByOwner: "Portfolio Demo Owner", ...seededContractFields(andersonProp as unknown as Record<string, unknown>, "Tom Anderson") },
+      signedDate: DAYS(-320), signedByClient: "Tom Anderson", signedByOwner: "Portfolio Demo Owner", ...seededContractFields({
+        proposal: andersonProp,
+        client: anderson,
+        build: andersonBuild,
+        signerName: "Tom Anderson",
+      }) },
   });
 
   const marshallBuild = await prisma.poolBuild.create({
@@ -704,7 +869,12 @@ async function main() {
   });
   const marshallContract = await prisma.contract.create({
     data: { proposalId: marshallProp.id, status: "SIGNED",
-      signedDate: DAYS(-370), signedByClient: "Daniel Marshall", signedByOwner: "Portfolio Demo Owner", ...seededContractFields(marshallProp as unknown as Record<string, unknown>, "Daniel Marshall") },
+      signedDate: DAYS(-370), signedByClient: "Daniel Marshall", signedByOwner: "Portfolio Demo Owner", ...seededContractFields({
+        proposal: marshallProp,
+        client: marshall,
+        build: marshallBuild,
+        signerName: "Daniel Marshall",
+      }) },
   });
   console.log("Created 2 historical contracts (Anderson, Marshall)");
 
