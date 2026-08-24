@@ -1,0 +1,539 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name    String
+  email   String?
+  phone   String?
+  address String?
+  city    String?
+  zip     String?
+
+  source       String? // FB Ad, Referral, Walk-in, etc.
+  trelloCardId String?
+
+  jotFormData Json? // Raw form responses
+
+  leadScore   Int     @default(0)
+  timeline    String? // ASAP, 3-6 months, exploring, etc.
+  budget      String?
+  financingInterested Boolean @default(false)
+  hasSpecificFeatures Boolean @default(false)
+  homeownerConfirmed  Boolean @default(false)
+  inServiceArea       Boolean @default(true)
+
+  notes String?
+
+  prepToken     String?  @unique // Unique token for prep kit link
+  prepTokenSent DateTime?
+  prepCompleted DateTime?
+
+  files          ClientFile[]
+  designProject  DesignProject?
+
+  @@index([leadScore])
+  @@index([prepToken])
+}
+
+model DesignProject {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientId String @unique
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  status String @default("WAITING_INFO") // WAITING_INFO, READY_TO_DESIGN, IN_PROGRESS, SCREENSHOTS, RENDERING, COMPLETE
+
+  templateUsed String? // Modern Geometric, Tropical Lagoon, Lap Pool, Minimalist Luxury, Family Standard
+
+  lotWidth     Float?
+  lotDepth     Float?
+  setbackFront Float?
+  setbackSide  Float?
+  setbackRear  Float?
+
+  poolStyle     String?
+  poolFeatures  Json? // JSON array of features
+  estimatedSize String?
+
+  zoning    String?
+  obstacles String? // septic, trees, slope, etc.
+
+  surveyReceived Boolean   @default(false)
+  photosReceived Boolean   @default(false)
+  surveyDate     DateTime?
+  photosDate     DateTime?
+
+  designStarted    DateTime?
+  designCompleted  DateTime?
+  rendersCompleted DateTime?
+
+  notes String?
+
+  files      ClientFile[]
+  renderJobs RenderJob[]
+}
+
+model ClientFile {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  clientId        String
+  client          Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  designProjectId String?
+  designProject   DesignProject? @relation(fields: [designProjectId], references: [id], onDelete: SetNull)
+
+  filename    String
+  storagePath String
+  fileType    String // MIME type
+  fileSize    Int
+
+  category String // SURVEY, BACKYARD_PHOTO, VIP3D_SCREENSHOT, GEMINI_RENDER, INSPIRATION, CONTRACT, OTHER
+  description String?
+  angle       String? // For backyard photos: BACK_DOOR, LEFT, RIGHT, BACK_FENCE, DETAIL
+
+  // Render job links
+  renderJobSource  RenderJob[] @relation("SourceScreenshot")
+  renderJobOutputs RenderJob[] @relation("RenderOutputs")
+
+  @@index([clientId])
+  @@index([designProjectId])
+  @@index([category])
+}
+
+model RenderJob {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  designProjectId String
+  designProject   DesignProject @relation(fields: [designProjectId], references: [id], onDelete: Cascade)
+
+  promptUsed String // Full Gemini prompt
+
+  sourceScreenshotId String?
+  sourceScreenshot   ClientFile? @relation("SourceScreenshot", fields: [sourceScreenshotId], references: [id], onDelete: SetNull)
+
+  outputFiles ClientFile[] @relation("RenderOutputs")
+
+  timeOfDay   String? // golden_hour, midday, dusk, night
+  cameraAngle String? // aerial, eye_level, elevated, detail
+
+  rating   Int?     // 1-5
+  selected Boolean  @default(false)
+  notes    String?
+
+  @@index([designProjectId])
+}
+
+model WeeklyMetric {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  weekStartDate DateTime @unique
+
+  newLeads        Int @default(0)
+  formsCompleted  Int @default(0)
+  qualifyingCalls Int @default(0)
+  designsStarted  Int @default(0)
+  appointmentsSet Int @default(0)
+  proposalsSent   Int @default(0)
+  dealsClosed     Int @default(0)
+
+  notes String?
+}
+
+model PromptTemplate {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name     String
+  template String // Full prompt with [BRACKETS] for variables
+  category String // RENDER, FOLLOW_UP_TEXT, etc.
+
+  @@index([category])
+}
+
+model PoolTemplate {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  name        String
+  description String
+  bestFor     String
+  shape       String?   // Rectangular, Freeform, Kidney, etc.
+  features    String?   // JSON array of feature strings
+}
+
+model PoolBuild {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name     String
+  status   String  @default("DRAFT") // DRAFT, QUOTED, SOLD, IN_PROGRESS, COMPLETE
+  clientId String? // Optional link to Client (not a FK — keeps models decoupled)
+
+  // Pool dimensions (length x width)
+  poolLength Float // ft
+  poolWidth  Float // ft
+
+  // Deck dimensions (overall pad footprint)
+  deckLength Float // ft
+  deckWidth  Float // ft
+
+  // Feature toggles
+  hasSpa        Boolean @default(false)
+  hasHeat       Boolean @default(false)
+  hasAutomation Boolean @default(false)
+  isSalt        Boolean @default(false)
+  hasCage       Boolean @default(false)
+  hasWaterfall  Boolean @default(false)
+  hasSod        Boolean @default(false)
+  hasTreeRemoval    Boolean @default(false)
+  hasFireFeatures   Boolean @default(false)
+  hasInteriorUpgrade Boolean @default(false)
+
+  // Choices
+  deckMaterial String @default("PAVER") // PAVER, TRAVERTINE
+  equipment    String @default("BASE")  // FULL, BASE
+
+  // Custom costs (user-entered, vary by job)
+  spaCost       Float @default(0)
+  heatCost      Float @default(0)
+  sodCost       Float @default(0)
+  cageCost      Float @default(0)
+  waterfallCost Float @default(0)
+  treeRemovalCost    Float @default(0)
+  fireFeaturesCost   Float @default(0)
+  interiorUpgradeCost Float @default(0)
+
+  // Deck area override — for irregular (non-rectangular) decks
+  deckAreaOverride Float?
+  deckVertices     String? // JSON array of {x, y} vertices for the polygon editor
+
+  // Computed totals
+  totalCOGS   Float @default(0)
+  salePrice   Float @default(0)
+  grossProfit Float @default(0)
+  marginPct   Float @default(0)
+
+  notes String?
+
+  lineItems BuildLineItem[]
+
+  @@index([status])
+}
+
+model BuildLineItem {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  buildId String
+  build   PoolBuild @relation(fields: [buildId], references: [id], onDelete: Cascade)
+
+  phase    String // STRUCTURE, ENGINEERING, PLUMBING, etc.
+  label    String
+  quantity Float
+  unit     String // ea, sq ft, LF, etc.
+  unitCost Float
+  total    Float
+
+  isOverride Boolean @default(false) // Tracks manual edits
+  sortOrder  Int     @default(0)
+
+  @@index([buildId])
+}
+
+model Proposal {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientId String
+  buildId  String
+
+  status    String @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
+  total     Float  @default(0)
+  discount  Float  @default(0)
+
+  // Snapshot fields (so proposal stays frozen even if build changes)
+  poolStyle     String?
+  poolFeatures  String? // JSON
+  poolLength    Float?
+  poolWidth     Float?
+  deckMaterial  String?
+  lineItems     String? // JSON snapshot of pricing line items
+  timeline      String? // JSON snapshot of build phases
+  exclusions    String?
+  notes         String?
+
+  renderImages  String? // JSON array of image URLs/paths
+
+  // Template fields
+  shareToken          String?   @unique
+  sharedAt            DateTime?
+  heroHeadline        String?
+  heroSubheadline     String?
+  approachText        String?
+  featureCards        String?   // JSON: [{title, description}]
+  milestones          String?   // JSON: [{name, description, percentage, amount}]
+  validUntil          String?
+  clientRespondedAt   DateTime?
+  clientMessage       String?   // from "Request Changes"
+
+  contracts Contract[]
+
+  @@index([clientId])
+  @@index([buildId])
+  @@index([shareToken])
+}
+
+model Contract {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  status     String @default("DRAFT") // DRAFT, SENT, SIGNED, VOID
+
+  // Contract-specific fields (from the user's PDF template)
+  // Will be populated after reviewing the uploaded contract PDF
+  contractData String? // JSON blob of all contract field values
+
+  signedDate     DateTime?
+  signedByClient String?
+  signedByOwner  String?
+
+  shareToken    String?   @unique
+  sharedAt      DateTime?
+  signatureData String?
+
+  @@index([proposalId])
+  @@index([shareToken])
+}
+
+// =============================================================================
+// QUADRANT 2 — JOB EXECUTION
+// =============================================================================
+
+model Job {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contractId String  @unique
+  clientId   String
+  proposalId String?
+
+  name        String
+  status      String   @default("ACTIVE") // ACTIVE, ON_HOLD, COMPLETE, CANCELLED
+  startDate   DateTime?
+  expectedEndDate DateTime?
+  actualEndDate   DateTime?
+
+  portalToken String? @unique
+
+  notes String?
+
+  phases   JobPhase[]
+  invoices Invoice[]
+  reviews  Review[]
+  maintenancePlans MaintenancePlan[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([portalToken])
+}
+
+model JobPhase {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  sortOrder   Int     @default(0)
+  status      String  @default("PENDING") // PENDING, IN_PROGRESS, BLOCKED, COMPLETE
+
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  actualStart    DateTime?
+  actualEnd      DateTime?
+
+  subcontractorId String?
+  subcontractor   Subcontractor? @relation(fields: [subcontractorId], references: [id])
+
+  notes  String?
+  photos String? // JSON array of photo URLs
+
+  @@index([jobId])
+  @@index([subcontractorId])
+}
+
+model Subcontractor {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name    String
+  trade   String  // "Excavation", "Gunite", "Tile", "Plumbing", "Electrical", "Screen", etc.
+  contact String?
+  email   String?
+  phone   String?
+
+  licenseNumber    String?
+  insuranceExpires DateTime?
+
+  hourlyRate Float?
+  rating     Int?    // 1-5 internal rating
+  notes      String?
+  active     Boolean @default(true)
+
+  jobPhases JobPhase[]
+
+  @@index([trade])
+  @@index([active])
+}
+
+// =============================================================================
+// QUADRANT 3 — CUSTOMER-FACING
+// =============================================================================
+
+model Review {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobId    String
+  job      Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  clientId String
+
+  status        String  @default("REQUESTED") // REQUESTED, COMPLETED, DECLINED, EXPIRED
+  requestSentAt DateTime?
+  completedAt   DateTime?
+
+  rating          Int?
+  text            String?
+  platform        String? // "Google", "Yelp", "Internal", "Facebook"
+  publicReviewUrl String?
+
+  requestToken String? @unique
+
+  @@index([jobId])
+  @@index([status])
+}
+
+model Referral {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  referrerClientId String  // existing Client ID who referred
+  referredName     String
+  referredPhone    String?
+  referredEmail    String?
+
+  status        String   @default("PENDING") // PENDING, CONTACTED, QUALIFIED, BUILT, EXPIRED
+  rewardAmount  Float?   // dollar amount earned by referrer when built
+  rewardPaidAt  DateTime?
+
+  notes String?
+
+  @@index([referrerClientId])
+  @@index([status])
+}
+
+// =============================================================================
+// QUADRANT 4 — BACK-OFFICE
+// =============================================================================
+
+model Invoice {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobId    String
+  job      Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  clientId String
+
+  number     String  @unique // "INV-2026-0001"
+  phaseLabel String  // "Pool Shell", "Tile & Coping", etc.
+  amount     Float
+  description String?
+
+  status        String   @default("DRAFT") // DRAFT, SENT, PAID, OVERDUE, VOID
+  sentAt        DateTime?
+  dueDate       DateTime?
+  paidAt        DateTime?
+  paidAmount    Float?
+  paymentMethod String?  // "STRIPE", "CHECK", "ACH", "WIRE"
+
+  payToken String? @unique
+
+  notes String?
+
+  @@index([jobId])
+  @@index([status])
+  @@index([payToken])
+}
+
+model JobCostEntry {
+  // Individual cost entry against a job — for accounting/P&L tracking
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  jobId    String
+  category String  // "MATERIAL", "LABOR", "SUBCONTRACTOR", "PERMIT", "EQUIPMENT", "OTHER"
+  vendor   String?
+  description String
+  amount   Float
+  date     DateTime @default(now())
+
+  receiptUrl String?
+  notes      String?
+
+  @@index([jobId])
+  @@index([category])
+}
+
+model MaintenancePlan {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientId String
+  jobId    String?
+  job      Job?    @relation(fields: [jobId], references: [id])
+
+  type    String  // "Spring Open", "Winter Close", "Equipment Service", "Custom"
+  cadence String  // "Annual", "Semi-Annual", "Quarterly", "Monthly"
+  nextDue DateTime
+  amount  Float?
+
+  status  String  @default("ACTIVE") // ACTIVE, PAUSED, CANCELLED, COMPLETED
+  notes   String?
+
+  @@index([clientId])
+  @@index([nextDue])
+  @@index([status])
+}
