@@ -23,12 +23,14 @@ export type TourPanelPosition = { x: number; y: number };
 export type TourPanelSize = { width: number; height: number };
 
 export function defaultTourPanelPosition(
-  viewportWidth: number,
+  viewport: TourPanelSize,
 ): TourPanelPosition {
+  if (viewport.width < 768) return { x: 16, y: 80 };
+
   return {
-    // The desktop sidebar is 16rem (256px); this leaves a 16px gutter.
-    x: viewportWidth >= 768 ? 272 : 16,
-    y: 80,
+    // Matches the presentation position in the approved desktop reference.
+    x: Math.max(272, Math.round(viewport.width * 0.25)),
+    y: Math.max(80, Math.round(viewport.height * 0.24)),
   };
 }
 

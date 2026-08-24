@@ -131,7 +131,12 @@ export function GuidedTourProvider({
     if (typeof window === "undefined") return;
     sessionStorage.removeItem(TOUR_PANEL_POSITION_KEY);
     setPanelPosition(
-      clampPosition(defaultTourPanelPosition(window.innerWidth)),
+      clampPosition(
+        defaultTourPanelPosition({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }),
+      ),
     );
   };
 
@@ -157,7 +162,11 @@ export function GuidedTourProvider({
     desktopViewport.current = window.innerWidth >= 768;
     setPanelPosition(
       clampPosition(
-        savedPosition ?? defaultTourPanelPosition(window.innerWidth),
+        savedPosition ??
+          defaultTourPanelPosition({
+            width: window.innerWidth,
+            height: window.innerHeight,
+          }),
       ),
     );
     setReady(true);
@@ -190,37 +199,56 @@ export function GuidedTourProvider({
 
     previousFocus.current ??= document.activeElement as HTMLElement;
     const target = copy[state.step as ActiveTourStep]?.target;
-    let tries = 0;
-    let retryTimer: number | undefined;
+    dialog.current?.focus();
 
-    const measureTarget = () => {
-      const candidates = target
-        ? (Array.from(
-            document.querySelectorAll(`[data-tour="${target}"]`),
-          ) as HTMLElement[])
-        : [];
-      const element =
-        candidates.find(
-          (candidate) =>
-            candidate.getClientRects().length > 0 &&
-            getComputedStyle(candidate).visibility !== "hidden",
-        ) ?? null;
+    if (!target) {
+      setSpotlightBox(null);
+      return;
+    }
 
-      if (element) {
-        setSpotlightBox(element.getBoundingClientRect());
-      } else if (++tries < 9) {
-        retryTimer = window.setTimeout(measureTarget, 150);
-      } else {
+    let targetElement: HTMLElement | null = null;
+    let animationFrame = 0;
+    let lastBox: Pick<DOMRect, "left" | "top" | "width" | "height"> | null =
+      null;
+
+    const isVisible = (element: HTMLElement) =>
+      element.isConnected &&
+      element.getClientRects().length > 0 &&
+      getComputedStyle(element).visibility !== "hidden";
+
+    const findTarget = () =>
+      (Array.from(
+        document.querySelectorAll(`[data-tour="${target}"]`),
+      ) as HTMLElement[]).find(isVisible) ?? null;
+
+    const trackTarget = () => {
+      if (!targetElement || !isVisible(targetElement)) {
+        targetElement = findTarget();
+      }
+
+      if (targetElement) {
+        const nextBox = targetElement.getBoundingClientRect();
+        const changed =
+          !lastBox ||
+          Math.abs(nextBox.left - lastBox.left) > 0.25 ||
+          Math.abs(nextBox.top - lastBox.top) > 0.25 ||
+          Math.abs(nextBox.width - lastBox.width) > 0.25 ||
+          Math.abs(nextBox.height - lastBox.height) > 0.25;
+        if (changed) {
+          lastBox = nextBox;
+          setSpotlightBox(nextBox);
+        }
+      } else if (lastBox) {
+        lastBox = null;
         setSpotlightBox(null);
       }
+
+      animationFrame = window.requestAnimationFrame(trackTarget);
     };
 
-    measureTarget();
-    dialog.current?.focus();
-    window.addEventListener("resize", measureTarget);
+    trackTarget();
     return () => {
-      window.removeEventListener("resize", measureTarget);
-      if (retryTimer) window.clearTimeout(retryTimer);
+      window.cancelAnimationFrame(animationFrame);
     };
   }, [
     enabled,
@@ -244,7 +272,10 @@ export function GuidedTourProvider({
       setPanelPosition((current) =>
         clampPosition(
           crossedBreakpoint || !current
-            ? defaultTourPanelPosition(window.innerWidth)
+            ? defaultTourPanelPosition({
+                width: window.innerWidth,
+                height: window.innerHeight,
+              })
             : current,
         ),
       );
@@ -401,7 +432,11 @@ export function GuidedTourProvider({
     event.preventDefault();
     setPanelPosition((current) => {
       const base =
-        current ?? defaultTourPanelPosition(window.innerWidth);
+        current ??
+        defaultTourPanelPosition({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
       return clampPosition({
         x: base.x + delta.x,
         y: base.y + delta.y,
@@ -417,14 +452,15 @@ export function GuidedTourProvider({
       )}
       {spotlightBox && item.target && (
         <button
+          data-tour-highlight
           aria-label={`Open ${item.title}`}
           onClick={activate}
-          className="fixed z-40 rounded-lg ring-4 ring-cyan-300/90 shadow-[0_0_34px_rgba(103,232,249,.8)] motion-reduce:shadow-none"
+          className="levelos-tour-highlight fixed z-40 rounded-lg"
           style={{
-            left: spotlightBox.left - 4,
-            top: spotlightBox.top - 4,
-            width: spotlightBox.width + 8,
-            height: spotlightBox.height + 8,
+            left: spotlightBox.left,
+            top: spotlightBox.top,
+            width: spotlightBox.width,
+            height: spotlightBox.height,
           }}
         />
       )}

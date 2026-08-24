@@ -31,9 +31,15 @@ describe("guided tour state", () => {
     assert.equal(hydrateTourState({ step: "unknown", active: true }), null);
     assert.equal(hydrateTourState({ step: "template", active: "yes", completed: false, dismissed: false, paused: false }), null);
   });
-  it("starts beside the desktop sidebar and keeps dragged positions on screen", () => {
-    assert.deepEqual(defaultTourPanelPosition(1440), { x: 272, y: 80 });
-    assert.deepEqual(defaultTourPanelPosition(390), { x: 16, y: 80 });
+  it("starts at the reference desktop position and keeps dragged positions on screen", () => {
+    assert.deepEqual(
+      defaultTourPanelPosition({ width: 2525, height: 1305 }),
+      { x: 631, y: 313 },
+    );
+    assert.deepEqual(
+      defaultTourPanelPosition({ width: 390, height: 844 }),
+      { x: 16, y: 80 },
+    );
     assert.deepEqual(
       clampTourPanelPosition(
         { x: 1400, y: -100 },

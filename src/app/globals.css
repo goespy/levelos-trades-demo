@@ -133,6 +133,39 @@
   }
 }
 
+@keyframes levelos-tour-highlight-pulse {
+  0%,
+  100% {
+    border-color: rgb(103 232 249 / 0.55);
+    box-shadow: 0 0 12px rgb(103 232 249 / 0.38);
+    opacity: 0.62;
+  }
+  50% {
+    border-color: rgb(103 232 249 / 1);
+    box-shadow:
+      0 0 0 4px rgb(103 232 249 / 0.35),
+      0 0 34px rgb(103 232 249 / 0.92);
+    opacity: 1;
+  }
+}
+
+.levelos-tour-highlight {
+  border: 2px solid rgb(103 232 249);
+  background: rgb(103 232 249 / 0.08);
+  animation: levelos-tour-highlight-pulse 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .levelos-tour-highlight {
+    animation: none;
+    border-color: rgb(103 232 249);
+    box-shadow:
+      0 0 0 4px rgb(103 232 249 / 0.35),
+      0 0 24px rgb(103 232 249 / 0.72);
+    opacity: 1;
+  }
+}
+
 @media print {
   @page { size: letter; margin: 0.45in; }
   .contract-document { box-shadow: none; }
