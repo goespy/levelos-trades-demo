@@ -9,6 +9,10 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import {
+  TOUR_PANEL_POSITION_KEY,
+  TOUR_STORAGE_KEY,
+} from "@/lib/guided-tour";
 
 const workflow = [
   "Lead qualification and design intake",
@@ -42,6 +46,8 @@ export default function DemoPage() {
         return;
       }
 
+      localStorage.removeItem(TOUR_STORAGE_KEY);
+      sessionStorage.removeItem(TOUR_PANEL_POSITION_KEY);
       router.push("/");
       router.refresh();
     } catch {

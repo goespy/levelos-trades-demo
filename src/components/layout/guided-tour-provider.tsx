@@ -17,6 +17,7 @@ import {
   hydrateTourState,
   initialTourState,
   routeMatches,
+  TOUR_PANEL_POSITION_KEY,
   TOUR_STORAGE_KEY,
   tourReducer,
   type TourPanelPosition,
@@ -25,7 +26,6 @@ import {
 
 type ActiveTourStep = Exclude<TourStep, "complete">;
 
-const TOUR_PANEL_POSITION_KEY = "levelos:guided-tour-panel:v1";
 const PANEL_FALLBACK_SIZE = { width: 384, height: 260 };
 
 const copy: Record<

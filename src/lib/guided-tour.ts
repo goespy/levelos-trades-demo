@@ -1,4 +1,5 @@
 export const TOUR_STORAGE_KEY = "levelos:guided-tour:v1";
+export const TOUR_PANEL_POSITION_KEY = "levelos:guided-tour-panel:v1";
 export type TourStep = "dashboard" | "clients" | "builds" | "newBuild" | "estimator" | "proposalNav" | "proposals" | "template" | "contracts" | "contract" | "complete";
 export type TourState = { step: TourStep; active: boolean; completed: boolean; dismissed: boolean; paused: boolean };
 export const initialTourState: TourState = { step: "dashboard", active: true, completed: false, dismissed: false, paused: false };
